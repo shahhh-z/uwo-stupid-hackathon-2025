@@ -8,23 +8,69 @@ const Index = () => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (code) => {
+  // changed: now receives an object { code, file }
+  const handleSubmit = async ({ message, file /* degrade ignored from caller */ }) => {
     // Add user message
-    const userMessage = { role: "user", content: code };
+    const userContent = file ? `Uploaded file: ${file.name}` : message;
+    const userMessage = { role: "user", content: userContent, type: "text" };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Simulate API call - replace with actual backend call later
-    setTimeout(() => {
-      const corruptedCode = `// CORRUPTED VERSION - DO NOT USE!\n// Added some spicy bugs for you 🔥\n\n${code}\n\n// TODO: fix the intentional bugs above\n// Good luck debugging this mess lol`;
-      
+    try {
+      let res;
+      if (file) {
+        const fd = new FormData();
+        fd.append("file", file);
+        // always include degrade flag
+        fd.append("degrade", "true");
+        res = await fetch("http://localhost:3001/api/chat", {
+          method: "POST",
+          body: fd,
+        });
+      } else {
+        // send message and degrade in JSON body
+        res = await fetch("http://localhost:3001/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, degrade: true }),
+        });
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        const assistantMessage = {
+          role: "assistant",
+          content: `Error from server: ${err.error || err.detail || JSON.stringify(err)}`,
+          type: "text",
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        setIsLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+      // Show assistant textual reply first
+      if (data.reply) {
+        setMessages((prev) => [...prev, { role: "assistant", content: data.reply, type: "text" }]);
+      }
+      // Then show the modified code (if present) as a code message
+      if (data.ruined || data.preview) {
+        const codeContent = data.ruined ?? data.preview;
+        setMessages((prev) => [...prev, { role: "assistant", content: codeContent, type: "code" }]);
+      } else if (!data.reply) {
+        // fallback
+        setMessages((prev) => [...prev, { role: "assistant", content: JSON.stringify(data), type: "text" }]);
+      }
+    } catch (e) {
       const assistantMessage = {
         role: "assistant",
-        content: corruptedCode,
+        content: `Request failed: ${String(e)}`,
+        type: "text",
       };
       setMessages((prev) => [...prev, assistantMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -58,7 +104,7 @@ const Index = () => {
         ) : (
           <div className="divide-y divide-border">
             {messages.map((message, index) => (
-              <MessageBubble key={index} role={message.role} content={message.content} />
+              <MessageBubble key={index} role={message.role} content={message.content} type={message.type} />
             ))}
             {isLoading && (
               <div className="flex gap-4 p-6 bg-muted/30">

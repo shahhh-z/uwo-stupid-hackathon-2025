@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Code2, Bot } from "lucide-react";
 
-export const MessageBubble = ({ role, content }) => {
+export const MessageBubble = ({ role, content, type }) => {
   const isUser = role === "user";
 
   return (
@@ -19,11 +19,10 @@ export const MessageBubble = ({ role, content }) => {
           <div className="text-sm font-semibold">
             {isUser ? "You" : "CodeAssist"}
           </div>
-          <pre className="bg-code-bg p-4 rounded-lg overflow-x-auto border border-border">
-            <code className="text-sm font-mono text-foreground whitespace-pre-wrap break-words">
-              {content}
-            </code>
-          </pre>
+
+          <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+            {content}
+          </p>
         </div>
       </div>
     </div>
